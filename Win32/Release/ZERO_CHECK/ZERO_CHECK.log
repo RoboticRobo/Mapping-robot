@@ -1,0 +1,13 @@
+﻿  Checking Build System
+  CMake is re-running because C:/Users/l3oss/Google Drive/CP/robotic/AutoBotProject/Autobot/build/CMakeFiles/generate.stamp is out-of-date.
+    the file 'C:/Users/l3oss/Google Drive/CP/robotic/AutoBotProject/Autobot/opencv/x86/vc15/lib/OpenCVConfig.cmake'
+    is newer than 'C:/Users/l3oss/Google Drive/CP/robotic/AutoBotProject/Autobot/build/CMakeFiles/generate.stamp.depend'
+    result='-1'
+  -- OpenCV ARCH: x86
+  -- OpenCV RUNTIME: vc15
+  -- OpenCV STATIC: OFF
+  -- Found OpenCV 2.4.13.3 in C:/Users/l3oss/Google Drive/CP/robotic/AutoBotProject/Autobot/opencv/x86/vc15/lib
+  -- You might need to add C:\Users\l3oss\Google Drive\CP\robotic\AutoBotProject\Autobot\opencv\x86\vc15\bin to your PATH to be able to run your applications.
+  -- Configuring done
+  -- Generating done
+  -- Build files have been written to: C:/Users/l3oss/Google Drive/CP/robotic/AutoBotProject/Autobot/build
