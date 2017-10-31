@@ -10,3 +10,16 @@
  
  
  https://github.com/dhbaird/easywsclient/blob/master/example-client.cpp
+ 
+ 
+ right bottom
+ id: 8	pos: 236.017, 163.929, 397.266	angle: 1.85717
+
+ right top
+ id: 8	pos: 240.121, -164.212, 396.376	angle: -19.0336 
+ 
+ left top
+ id: 8	pos: -211.61, -167.474, 406.818	angle: 4.2893
+ 
+ left bottom
+ id: 8	pos: -190.826, 168.746, 408.63	angle: -1.11681
