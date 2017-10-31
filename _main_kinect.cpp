@@ -27,6 +27,8 @@ int main() {
 		kin.GrabData(depthImg, colorImg, indexImg, pointImg);
 		imshow("depthImg", depthImg);
 		imshow("colorImg", colorImg);
+		imshow("indexImg", indexImg);
+		imshow("pointImg", pointImg);
 
 		waitKey(100);
 	}
