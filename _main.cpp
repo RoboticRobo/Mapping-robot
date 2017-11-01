@@ -7,6 +7,8 @@
 #include <winsock2.h>
 #include <io.h>
 #include <ws2tcpip.h>
+#include <queue>
+#include <stack>
 
 #include "RobotConnector.h"
 
@@ -30,11 +32,14 @@
 
 #define Create_Comport "COM3"
 #define M_PI 3.141592653589793238462643383279502884L
+#define ROBOT_SIZE 50
+#define MAP_SIZE 2000
 
 bool isRecord = false;
 
 using namespace std;
 using namespace cv;
+using easywsclient::WebSocket;
 
 KinectConnector kin;
 CreateData	robotData;
@@ -43,7 +48,24 @@ Mat depthImg;
 Mat colorImg;
 Mat indexImg;
 Mat pointImg;
-int score[2000][2000];
+queue <pair<int, int> > q;
+int score[MAP_SIZE + 100][MAP_SIZE + 100];
+int d[MAP_SIZE + 100][MAP_SIZE + 100];
+pair<int, int> p[MAP_SIZE + 100][MAP_SIZE + 100];
+
+boolean finish = 0;
+WebSocket::pointer wp;
+
+bool robot_can_stay_at(int vx, int vy) {
+	for (int i = vx - (ROBOT_SIZE - 1) / 2; i < vx + (ROBOT_SIZE + 1) / 2; i++) {
+		for (int j = vy - (ROBOT_SIZE - 1) / 2; j < vy + (ROBOT_SIZE + 1) / 2; j++) {
+			if (score[i][j] >= 1) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
 
 void update_score(double sx, double sy, double ex, double ey) {
 	int length = (int)floor(sqrt((ex - sx)*(ex - sx) + (ey - sy)*(ey - sy)));
@@ -123,12 +145,12 @@ void convert_to_world_frame(double posx, double posy, double angle, double end_x
 	end_world_y = roundDown(posy + (end_x_robot * -1 * sin(angle) + end_y_robot * cos(angle)));
 }
 
-void plot_score_map() {
+void plot_score_map(boolean save = false) {
 
-	Mat map(2000, 2000, CV_8UC3, Scalar(0, 0, 0));
+	Mat map(MAP_SIZE, MAP_SIZE, CV_8UC3, Scalar(0, 0, 0));
 
-	for (int i = 0; i < 2000; i++) {
-		for (int j = 0; j < 2000; j++) {
+	for (int i = 0; i < MAP_SIZE; i++) {
+		for (int j = 0; j < MAP_SIZE; j++) {
 			if (score[i][j] > 0)
 				map.at<Vec3b>(j, i) = Vec3b(0, 0, 255);
 		}
@@ -136,6 +158,47 @@ void plot_score_map() {
 	Mat enc;
 	resize(map, enc, Size(500, 500));
 	imshow("world", enc);
+	
+	if(save)
+		imwrite("map.jpg", enc);
+
+}
+
+boolean get_next_point(int posx, int posy, int& des_x, int& des_y) {
+	int dx[] = { 0,-1,1,0 };
+	int dy[] = { -1,0,0,1 };
+
+	q.push(make_pair(posx, posy));
+	d[posx][posy] = 1;
+
+	while (!q.empty()) {
+		int ux = q.front().first;
+		int uy = q.front().second;
+		q.pop();
+		for (int i = 0; i<4; i++) {
+			int vx = ux + dx[i];
+			int vy = uy + dy[i];
+			if (vx < MAP_SIZE && vx >= 0 && vy < MAP_SIZE && vy >= 0 && d[vx][vy] == 0 && robot_can_stay_at(vx, vy)) {
+				d[vx][vy] = d[ux][uy] + 1;
+				p[vx][vy] = make_pair(ux, uy);
+				q.push(make_pair(vx, vy));
+				if (score[vx][vy] == 0) {
+					
+					des_x = vx;
+					des_y = vy;
+
+					while (des_x != posx && des_y != posy) {
+						if (p[des_x][des_y].first == posx && p[des_x][des_y].second == posy)
+							return true;
+						des_x = p[des_x][des_y].first;
+						des_y = p[des_x][des_y].second;
+					}
+					
+				}
+			}
+		}
+	}
+	return false;
 }
 
 void handle_response(const std::string & message) {
@@ -147,11 +210,10 @@ void handle_response(const std::string & message) {
 	string res = message.c_str();
 	res = res.substr(3, res.size() - 3);
 	while (res.find("<br/>") != string::npos) {
-		///////////////////////////////////////////////
-		// find my robot in response
-		///////////////////////////////////////////////
+
 		if (res.find("id: 8") == 0) {
 			res = res.substr(0, res.find("<br/>"));
+
 			///////////////////////////////////////////////
 			// extract position and angle from response
 			///////////////////////////////////////////////
@@ -202,91 +264,94 @@ void handle_response(const std::string & message) {
 				//cout << "end_y_robot = " << end_y_robot << endl;
 				//cout << "end_x_world = " << end_x_world << endl;
 				//cout << "end_y_world = " << end_y_world << endl;
-				update_score(posx + 1000, posy + 1000, end_x_world + 1000, end_y_world + 1000);
+				update_score(posx + MAP_SIZE / 2, posy + MAP_SIZE / 2, end_x_world + MAP_SIZE / 2, end_y_world + MAP_SIZE / 2);
 
 				//cout << "updated" << endl;
 
 			}
 
-			plot_score_map();
+			plot_score_map(false);
 
 			///////////////////////////////////////////////
 			// Meen: find path to grid that score 0 (BFS)
 			///////////////////////////////////////////////
 			int des_x, des_y;
-
-
-			///////////////////////////////////////////////
-			// walk to first point of Meen's path
-			///////////////////////////////////////////////
-			walk_to(posx, posy, angle, des_x, des_y);
+			if (!get_next_point(posx, posy, des_x, des_y)) {
+				finish = true;
+			}
+			else {
+				///////////////////////////////////////////////
+				// walk to first point of Meen's path
+				///////////////////////////////////////////////
+				walk_to(posx, posy, angle, des_x, des_y);
+			}
 		}
 		else
 			res = res.substr(res.find("<br/>") + 5, res.size() - res.find("<br/>") - 5);
 	}
 }
 
-int main()
-{
-	cvNamedWindow("Robot");
-
-	///////////////////////////////////////////////
-	// initialize robot
-	///////////////////////////////////////////////
-	/*
-	if (!robot.Connect(Create_Comport))
-	{
-	cout << "Error : Can't connect to robot @" << Create_Comport << endl;
-	return -1;
-	}
-	//robot.DriveDirect(0, 0);
-	*/
-
-	///////////////////////////////////////////////
-	// initialize kinect
-	///////////////////////////////////////////////
+boolean initial_kinect() {
 	kin = KinectConnector();
 	if (!kin.Connect()) {
 		cout << "Error : Can't connect to kinect" << endl;
-		return 1;
+		return false;
 	}
 	kin.GrabData(depthImg, colorImg, indexImg, pointImg);
-	cvWaitKey(3000);
+	return true;
+}
 
-	///////////////////////////////////////////////
-	// initialize socket
-	///////////////////////////////////////////////
-	//INT rc;
-	//WSADATA wsaData;
-	//rc = WSAStartup(MAKEWORD(2, 2), &wsaData);
-	//if (rc) {
-	//	printf("WSAStartup Failed.\n");
-	//	return 1;
-	//}
-	//using easywsclient::WebSocket;
-	//WebSocket::pointer wp = WebSocket::from_url("ws://192.168.1.59:8080/pose");
-
-	///////////////////////////////////////////////
-	// slam
-	///////////////////////////////////////////////
-
-	while (true)
-	{
-		//wp->poll();
-		//wp->send("");
-		//wp->dispatch(handle_response);
-		handle_response(" | id: 8   pos: 0, 0, 0   angle: -180<br/>");
-
-		cvWaitKey(100);
+boolean initial_robot() {
+	if (!robot.Connect(Create_Comport)) {
+		cout << "Error : Can't connect to robot @" << Create_Comport << endl;
+		return false;
 	}
+	robot.DriveDirect(0, 0);
+	return true;
+}
 
-	///////////////////////////////////////////////
-	// close everything;
-	///////////////////////////////////////////////
-	//robot.Disconnect();
-	//wp->close();
-	//delete wp;
-	//WSACleanup();
+boolean initial_socket() {
+	INT rc;
+	WSADATA wsaData;
+	rc = WSAStartup(MAKEWORD(2, 2), &wsaData);
+	if (rc) {
+		printf("WSAStartup Failed.\n");
+		return false;
+	}
+	wp = WebSocket::from_url("ws://192.168.1.59:8080/pose");
+	return true;
+}
+
+void close() {
+	robot.Disconnect();
+	wp->close();
+	delete wp;
+	WSACleanup();
+}
+
+int main()
+{
+	cvNamedWindow("world");
+
+	if (initial_robot() && initial_kinect() && initial_socket()) {
+
+		while (true)
+		{
+			//wp->poll();
+			//wp->send("");
+			//wp->dispatch(handle_response);
+			handle_response(" | id: 8   pos: 0, 0, 0   angle: -180<br/>");
+
+			if (finish)
+				break;
+
+			cvWaitKey(100);
+		}
+
+		plot_score_map(true);
+
+		close();
+	}
 
 	return 0;
 }
