@@ -53,7 +53,7 @@ void update_score(int sx, int sy, int ex, int ey) {
 		int x, y;
 		x = sx + k*(i + 1)*(ex - sx);
 		y = sy + k*(i + 1)*(ey - sy);
-		if (i >(length - 2)) {
+		if (i > (length - 2)) {
 			score[x][y] += 1;
 			score[x][y + 1] += 1;
 			score[x + 1][y] += 1;
@@ -88,13 +88,13 @@ void walk(double vl, double vr) {
 	robot.DriveDirect(0, 0);
 }
 
-void walk_to(double posx, double posy, double angle, int endx, int endy) {
+void walk_to(double posx,double posy, double angle, int endx, int endy) {
 	double diffx = abs(posx - endx);
 	double diffy = abs(posy - endy);
-
-	double target_angle = 360.0 - atan(diffy / diffx);
+	
+	double target_angle = atan(diffy / diffx);
 	double diff_angle = target_angle - angle;
-
+	
 	if (diff_angle > 5) {
 		double r = /*diff_angle <= 180 ? -1 :*/ 1;
 		double vl, vr;
@@ -104,17 +104,17 @@ void walk_to(double posx, double posy, double angle, int endx, int endy) {
 		int velR = (int)(vr*Create_MaxVel);
 
 		robot.DriveDirect(velL, velR);
-
+		
 		cvWaitKey(20);
 		return;
 	}
 
-	if (diffx > 1 && diffy > 1)
+	if( diffx > 1 && diffy > 1 )
 	{
-
+	
 		double vx, vz;
 		vx = vz = 0.0;
-
+			
 		vx = 1.0;
 
 		double vl = vx - vz;
@@ -145,7 +145,7 @@ void handle_response(const std::string & message)
 		///////////////////////////////////////////////
 		if (res.find("id: 8") == 0) {
 			res = res.substr(0, res.find("<br/>"));
-
+			
 			///////////////////////////////////////////////
 			// extract position and angle from response
 			///////////////////////////////////////////////
@@ -164,8 +164,8 @@ void handle_response(const std::string & message)
 				res = res.substr(1);
 			}
 			angle = neg * atof(res.c_str());
-
-			walk_to(posx, posy, angle, 165, 140);
+			
+			walk_to(posx,posy,angle,165,140);
 
 			//cout << posx << " " << posy <<" " <<posz <<" " <<angle  << " end\n";
 
@@ -180,7 +180,7 @@ void handle_response(const std::string & message)
 				// convert point in robot frame to world frame
 				///////////////////////////////////////////////
 				double end_x_world, end_y_world;
-				convert_to_world_frame(posx, posy, angle, end_x_robot, end_y_robot, end_x_world, end_y_world);
+				convert_to_world_frame(posx, posy, angle, end_x_robot, end_y_robot, end_x_world , end_y_world);
 
 				///////////////////////////////////////////////
 				// update score from point
@@ -199,7 +199,7 @@ void handle_response(const std::string & message)
 			// ---
 
 		}
-		else
+		else 
 			res = res.substr(res.find("<br/>") + 5, res.size() - res.find("<br/>") - 5);
 	}
 	cout << "Sasad\n";
@@ -218,7 +218,7 @@ int main()
 		return -1;
 	}
 	robot.DriveDirect(0, 0);
-
+	
 	///////////////////////////////////////////////
 	// initialize kinect
 	///////////////////////////////////////////////
@@ -250,7 +250,7 @@ int main()
 		wp->poll();
 		wp->send("");
 		wp->dispatch(handle_response);
-
+		
 		cvWaitKey(100);
 	}
 
