@@ -71,6 +71,49 @@ void update_score(double sx, double sy, double ex, double ey) {
 	score[(int)ex][(int)ey] += 2;
 }
 
+
+void walk_to(double posx, double posy, double angle, int endx, int endy) {
+	double diffx = abs(posx - endx);
+	double diffy = abs(posy - endy);
+
+	double target_angle = atan(diffy / diffx);
+	double diff_angle = target_angle - angle;
+
+	if (diff_angle > 5) {
+		double r = /*diff_angle <= 180 ? -1 :*/ 1;
+		double vl, vr;
+		vl = r;
+		vr = r;
+		int velL = (int)(vl*Create_MaxVel);
+		int velR = (int)(vr*Create_MaxVel);
+
+		robot.DriveDirect(velL, velR);
+
+		cvWaitKey(20);
+		return;
+	}
+
+	if (diffx > 1 && diffy > 1)
+	{
+		double vx, vz;
+		vx = vz = 0.0;
+
+		vx = 1.0;
+
+		double vl = vx - vz;
+		double vr = vx + vz;
+
+		int velL = (int)(vl*Create_MaxVel);
+		int velR = (int)(vr*Create_MaxVel);
+
+		robot.DriveDirect(velL, velR);
+		cvWaitKey(20);
+		return;
+	}
+
+}
+
+
 double roundDown(double value) {
 	return value < 0.0001 && value > -0.0001 ? 0 : value;
 }
@@ -168,15 +211,15 @@ void handle_response(const std::string & message) {
 			plot_score_map();
 
 			///////////////////////////////////////////////
-			// Meen: find path to grid that score 0 (BFS ??)
+			// Meen: find path to grid that score 0 (BFS)
 			///////////////////////////////////////////////
-			// ---
+			int des_x, des_y;
+
 
 			///////////////////////////////////////////////
 			// walk to first point of Meen's path
 			///////////////////////////////////////////////
-			// ---
-
+			walk_to(posx, posy, angle, des_x, des_y);
 		}
 		else
 			res = res.substr(res.find("<br/>") + 5, res.size() - res.find("<br/>") - 5);
