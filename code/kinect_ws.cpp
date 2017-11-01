@@ -43,7 +43,7 @@ Mat depthImg;
 Mat colorImg;
 Mat indexImg;
 Mat pointImg;
-int score[1100][1100];
+int score[2000][2000];
 
 void update_score(int sx, int sy, int ex, int ey) {
 	int length = (int)floor(sqrt((ex - sx)*(ex - sx) + (ey - sy)*(ey - sy)));
@@ -54,7 +54,7 @@ void update_score(int sx, int sy, int ex, int ey) {
 		int x, y;
 		x = sx + k*(i + 1)*(ex - sx);
 		y = sy + k*(i + 1)*(ey - sy);
-		if (i > (length - 2)) {
+		if (i >(length - 2)) {
 			score[x][y] += 1;
 			score[x][y + 1] += 1;
 			score[x + 1][y] += 1;
@@ -76,32 +76,23 @@ double roundDown(double value) {
 }
 
 void convert_to_world_frame(double posx, double posy, double angle, double end_x_robot, double end_y_robot, double& end_world_x, double& end_world_y) {
-
-	
-	end_world_x = roundDown(posx + (end_x_robot * sin(angle) + end_y_robot * cos(M_PI + angle)));
-	end_world_y = roundDown(posy + (end_x_robot * cos(angle) + end_y_robot * sin(M_PI + angle)));
+	end_world_x = roundDown(posx + (end_x_robot * cos(angle) + end_y_robot * -sin(M_PI + angle)));
+	end_world_y = roundDown(posy + (end_x_robot * sin(angle) + end_y_robot * cos(M_PI + angle)));
 }
 
-//void walk(double vl, double vr) {
-//
-//	int velL = (int)(vl*Create_MaxVel);
-//	int velR = (int)(vr*Create_MaxVel);
-//
-//	robot.DriveDirect(velL, velR);
-//	Sleep(100);
-//	robot.DriveDirect(0, 0);
-//}
-
 void plot_score_map() {
-	Mat map(1000, 1000, CV_8UC3, Scalar(0, 0, 0));
 
-	for (int i = 0; i < 1000; i++) {
-		for (int j = 0; j < 1000; j++) {
-			if(score[j][i] > 0)
+	Mat map(2000, 2000, CV_8UC3, Scalar(0, 0, 0));
+
+	for (int i = 0; i < 2000; i++) {
+		for (int j = 0; j < 2000; j++) {
+			if (score[i][j] > 0)
 				map.at<Vec3b>(j, i) = Vec3b(0, 0, 255);
 		}
 	}
-	imshow("world", map);
+	Mat enc;
+	resize(map, enc, Size(500, 500));
+	imshow("world", enc);
 }
 
 void handle_response(const std::string & message) {
@@ -136,45 +127,46 @@ void handle_response(const std::string & message) {
 				neg = -1;
 				res = res.substr(1);
 			}
-			angle = neg * atof(res.c_str());
+			angle = 180 + neg * atof(res.c_str());
 
 			//cout << posx << " " << posy <<" " <<posz <<" " <<angle  << " end\n";
 
 			for (int i = 0; i < 640; i++) {
+
+				cout << i << endl;
 				///////////////////////////////////////////////
 				// find point in robot frame from depth
 				///////////////////////////////////////////////
-				double end_y_robot = depthImg.at<USHORT>(i, 240) / 10.0;
-				if (end_y_robot == 0)
+				double end_x_robot = depthImg.at<USHORT>(240, i) / 10.0;
+				if (end_x_robot == 0)
 					continue;
-				double end_x_robot = (i - 320.0) / 575.0 * end_y_robot;
+				double end_y_robot = (i - 320.0) / 575.0 * end_x_robot;
+				cout << "cal" << endl;
 
 				///////////////////////////////////////////////
 				// convert point in robot frame to world frame
 				///////////////////////////////////////////////
 				double end_x_world, end_y_world;
-				convert_to_world_frame(posx, posy, angle, end_x_robot, end_y_robot, end_x_world , end_y_world);
+				convert_to_world_frame(posx, posy, angle, end_x_robot, end_y_robot, end_x_world, end_y_world);
+				cout << "convert" << endl;
 
 
 				///////////////////////////////////////////////
 				// update score from point
 				///////////////////////////////////////////////
-				if (end_x_world > 500 || end_x_world < -500 || end_y_world > 500 || end_y_world < -500) {
-					cout << "posx = " << posx << endl;
+//				if (end_x_world > 500 || end_x_world < -500 || end_y_world > 500 || end_y_world < -500) {
+				cout << "posx = " << posx << endl;
 					cout << "posy = " << posy << endl;
 					cout << "angle = " << angle << endl;
 					cout << "end_x_robot = " << end_x_robot << endl;
 					cout << "end_y_robot = " << end_y_robot << endl;
 					cout << "end_x_world = " << end_x_world << endl;
 					cout << "end_y_world = " << end_y_world << endl;
-					cin >> posx;
-
-				}	
-				update_score(posx + 500, posy + 500, end_x_world + 500, end_y_world + 500);
-
+	//			}
+				update_score(posx + 1000, posy + 1000, end_x_world + 1000, end_y_world + 1000);
+				cout << "updated" << endl;
 
 			}
-
 			plot_score_map();
 
 			///////////////////////////////////////////////
@@ -188,7 +180,7 @@ void handle_response(const std::string & message) {
 			// ---
 
 		}
-		else 
+		else
 			res = res.substr(res.find("<br/>") + 5, res.size() - res.find("<br/>") - 5);
 	}
 }
@@ -203,8 +195,8 @@ int main()
 	/*
 	if (!robot.Connect(Create_Comport))
 	{
-		cout << "Error : Can't connect to robot @" << Create_Comport << endl;
-		return -1;
+	cout << "Error : Can't connect to robot @" << Create_Comport << endl;
+	return -1;
 	}
 	//robot.DriveDirect(0, 0);
 	*/
@@ -239,7 +231,7 @@ int main()
 		wp->poll();
 		wp->send("");
 		wp->dispatch(handle_response);
-		
+
 		cvWaitKey(100);
 	}
 
