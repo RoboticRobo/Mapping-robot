@@ -45,7 +45,7 @@ Mat indexImg;
 Mat pointImg;
 int score[2000][2000];
 
-void update_score(int sx, int sy, int ex, int ey) {
+void update_score(double sx, double sy, double ex, double ey) {
 	int length = (int)floor(sqrt((ex - sx)*(ex - sx) + (ey - sy)*(ey - sy)));
 
 	double k = 1 / (double)length;
@@ -55,10 +55,10 @@ void update_score(int sx, int sy, int ex, int ey) {
 		x = sx + k*(i + 1)*(ex - sx);
 		y = sy + k*(i + 1)*(ey - sy);
 		if (i >(length - 2)) {
-			score[x][y] += 1;
-			score[x][y + 1] += 1;
-			score[x + 1][y] += 1;
-			score[x + 1][y + 1] += 1;
+			score[x][y] += 2;
+			score[x][y + 1] += 2;
+			score[x + 1][y] += 2;
+			score[x + 1][y + 1] += 2;
 		}
 		else {
 			score[x][y] += -1;
@@ -68,7 +68,7 @@ void update_score(int sx, int sy, int ex, int ey) {
 		}
 	}
 
-	score[ex][ey] += 2;
+	score[(int)ex][(int)ey] += 2;
 }
 
 double roundDown(double value) {
@@ -76,8 +76,8 @@ double roundDown(double value) {
 }
 
 void convert_to_world_frame(double posx, double posy, double angle, double end_x_robot, double end_y_robot, double& end_world_x, double& end_world_y) {
-	end_world_x = roundDown(posx + (end_x_robot * cos(angle) + end_y_robot * -sin(M_PI + angle)));
-	end_world_y = roundDown(posy + (end_x_robot * sin(angle) + end_y_robot * cos(M_PI + angle)));
+	end_world_x = roundDown(posx + (end_x_robot * cos(angle) + end_y_robot * sin(angle)));
+	end_world_y = roundDown(posy + (end_x_robot * -1 * sin(angle) + end_y_robot * cos(angle)));
 }
 
 void plot_score_map() {
@@ -99,11 +99,10 @@ void handle_response(const std::string & message) {
 
 	kin.GrabData(depthImg, colorImg, indexImg, pointImg);
 	imshow("depthImg", depthImg);
-	//imshow("colorImg", colorImg);
+	imshow("colorImg", colorImg);
 
 	string res = message.c_str();
 	res = res.substr(3, res.size() - 3);
-
 	while (res.find("<br/>") != string::npos) {
 		///////////////////////////////////////////////
 		// find my robot in response
@@ -128,12 +127,12 @@ void handle_response(const std::string & message) {
 				res = res.substr(1);
 			}
 			angle = 180 + neg * atof(res.c_str());
-
 			//cout << posx << " " << posy <<" " <<posz <<" " <<angle  << " end\n";
+			angle = angle * M_PI / 180;
 
 			for (int i = 0; i < 640; i++) {
 
-				cout << i << endl;
+				//cout << i << endl;
 				///////////////////////////////////////////////
 				// find point in robot frame from depth
 				///////////////////////////////////////////////
@@ -141,32 +140,31 @@ void handle_response(const std::string & message) {
 				if (end_x_robot == 0)
 					continue;
 				double end_y_robot = (i - 320.0) / 575.0 * end_x_robot;
-				cout << "cal" << endl;
+				//cout << "cal" << endl;
 
 				///////////////////////////////////////////////
 				// convert point in robot frame to world frame
 				///////////////////////////////////////////////
 				double end_x_world, end_y_world;
 				convert_to_world_frame(posx, posy, angle, end_x_robot, end_y_robot, end_x_world, end_y_world);
-				cout << "convert" << endl;
-
+				//cout << "convert" << endl;
 
 				///////////////////////////////////////////////
 				// update score from point
 				///////////////////////////////////////////////
-//				if (end_x_world > 500 || end_x_world < -500 || end_y_world > 500 || end_y_world < -500) {
-				cout << "posx = " << posx << endl;
-					cout << "posy = " << posy << endl;
-					cout << "angle = " << angle << endl;
-					cout << "end_x_robot = " << end_x_robot << endl;
-					cout << "end_y_robot = " << end_y_robot << endl;
-					cout << "end_x_world = " << end_x_world << endl;
-					cout << "end_y_world = " << end_y_world << endl;
-	//			}
+				//cout << "posx = " << posx << endl;
+				//cout << "posy = " << posy << endl;
+				//cout << "angle = " << angle << endl;
+				//cout << "end_x_robot = " << end_x_robot << endl;
+				//cout << "end_y_robot = " << end_y_robot << endl;
+				//cout << "end_x_world = " << end_x_world << endl;
+				//cout << "end_y_world = " << end_y_world << endl;
 				update_score(posx + 1000, posy + 1000, end_x_world + 1000, end_y_world + 1000);
-				cout << "updated" << endl;
+
+				//cout << "updated" << endl;
 
 			}
+
 			plot_score_map();
 
 			///////////////////////////////////////////////
@@ -209,28 +207,32 @@ int main()
 		cout << "Error : Can't connect to kinect" << endl;
 		return 1;
 	}
+	kin.GrabData(depthImg, colorImg, indexImg, pointImg);
+	cvWaitKey(3000);
 
 	///////////////////////////////////////////////
 	// initialize socket
 	///////////////////////////////////////////////
-	INT rc;
-	WSADATA wsaData;
-	rc = WSAStartup(MAKEWORD(2, 2), &wsaData);
-	if (rc) {
-		printf("WSAStartup Failed.\n");
-		return 1;
-	}
-	using easywsclient::WebSocket;
-	WebSocket::pointer wp = WebSocket::from_url("ws://192.168.1.59:8080/pose");
+	//INT rc;
+	//WSADATA wsaData;
+	//rc = WSAStartup(MAKEWORD(2, 2), &wsaData);
+	//if (rc) {
+	//	printf("WSAStartup Failed.\n");
+	//	return 1;
+	//}
+	//using easywsclient::WebSocket;
+	//WebSocket::pointer wp = WebSocket::from_url("ws://192.168.1.59:8080/pose");
 
 	///////////////////////////////////////////////
 	// slam
 	///////////////////////////////////////////////
+
 	while (true)
 	{
-		wp->poll();
-		wp->send("");
-		wp->dispatch(handle_response);
+		//wp->poll();
+		//wp->send("");
+		//wp->dispatch(handle_response);
+		handle_response(" | id: 8   pos: 0, 0, 0   angle: -180<br/>");
 
 		cvWaitKey(100);
 	}
@@ -239,9 +241,9 @@ int main()
 	// close everything;
 	///////////////////////////////////////////////
 	//robot.Disconnect();
-	wp->close();
-	delete wp;
-	WSACleanup();
+	//wp->close();
+	//delete wp;
+	//WSACleanup();
 
 	return 0;
 }
