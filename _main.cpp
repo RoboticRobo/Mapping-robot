@@ -101,9 +101,16 @@ void update_score(double sx, double sy, double ex, double ey) {
 void walk_to(double posx, double posy, double angle, int endx, int endy) {
 	double diffx = abs(posx - endx);
 	double diffy = abs(posy - endy);
+	angle = angle - 90;
+	if (angle < 0) {
+		angle += 360;
+	}
 
 	double target_angle = atan(diffy / diffx);
 	double diff_angle = target_angle - angle;
+	if (diff_angle < 0) {
+		diff_angle += 360;
+	}
 
 	if (diff_angle > 5) {
 		double r = /*diff_angle <= 180 ? -1 :*/ 1;
