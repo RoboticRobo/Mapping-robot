@@ -33,7 +33,7 @@
 #define Create_Comport "COM3"
 #define M_PI 3.141592653589793238462643383279502884L
 #define ROBOT_SIZE 50
-#define MAP_SIZE 2000
+#define MAP_SIZE 600
 
 bool isRecord = false;
 
@@ -70,27 +70,31 @@ bool robot_can_stay_at(int vx, int vy) {
 void update_score(double sx, double sy, double ex, double ey) {
 	int length = (int)floor(sqrt((ex - sx)*(ex - sx) + (ey - sy)*(ey - sy)));
 
+	if (length == 0)
+		return;
 	double k = 1 / (double)length;
 
-	for (int i = 0; i < length; i++) {
+
+	for (int i = 50; i < length; i++) {
 		int x, y;
 		x = sx + k*(i + 1)*(ex - sx);
 		y = sy + k*(i + 1)*(ey - sy);
-		if (i >(length - 2)) {
-			score[x][y] += 2;
-			score[x][y + 1] += 2;
-			score[x + 1][y] += 2;
-			score[x + 1][y + 1] += 2;
-		}
-		else {
-			score[x][y] += -1;
-			score[x][y + 1] += -1;
-			score[x + 1][y] += -1;
-			score[x + 1][y + 1] += -1;
+
+		if (x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE) {
+			if (i > (length - 2)) {
+				score[x][y] += 4;
+				score[x][y + 1] += 4;
+				score[x + 1][y] += 4;
+				score[x + 1][y + 1] += 4;
+			}
+			else {
+				score[x][y] += -1;
+				score[x][y + 1] += -1;
+				score[x + 1][y] += -1;
+				score[x + 1][y + 1] += -1;
+			}
 		}
 	}
-
-	score[(int)ex][(int)ey] += 2;
 }
 
 
@@ -145,18 +149,27 @@ void convert_to_world_frame(double posx, double posy, double angle, double end_x
 	end_world_y = roundDown(posy + (end_x_robot * -1 * sin(angle) + end_y_robot * cos(angle)));
 }
 
-void plot_score_map(boolean save = false) {
+void plot_score_map(boolean save = false, int posx = -1, int posy = -1) {
 
 	Mat map(MAP_SIZE, MAP_SIZE, CV_8UC3, Scalar(0, 0, 0));
 
 	for (int i = 0; i < MAP_SIZE; i++) {
 		for (int j = 0; j < MAP_SIZE; j++) {
-			if (score[i][j] > 0)
-				map.at<Vec3b>(j, i) = Vec3b(0, 0, 255);
+			if (score[i][j] < -100)
+				map.at<Vec3b>(j, i) = Vec3b(255, 255, 255);
 		}
 	}
+
+	if (posx != -1 && posy != -1) {
+		for (int i = posx - (ROBOT_SIZE - 1) / 2; i < posx + (ROBOT_SIZE + 1) / 2; i++) {
+			for (int j = posy - (ROBOT_SIZE - 1) / 2; j < posy + (ROBOT_SIZE + 1) / 2; j++) {
+					map.at<Vec3b>(j, i) = Vec3b(0, 255, 0);
+			}
+		}
+	}
+
 	Mat enc;
-	resize(map, enc, Size(500, 500));
+	resize(map, enc, Size(MAP_SIZE, MAP_SIZE));
 	imshow("world", enc);
 	
 	if(save)
@@ -204,8 +217,8 @@ boolean get_next_point(int posx, int posy, int& des_x, int& des_y) {
 void handle_response(const std::string & message) {
 
 	kin.GrabData(depthImg, colorImg, indexImg, pointImg);
-	imshow("depthImg", depthImg);
-	imshow("colorImg", colorImg);
+//	imshow("depthImg", depthImg);
+//	imshow("colorImg", colorImg);
 
 	string res = message.c_str();
 	res = res.substr(3, res.size() - 3);
@@ -231,7 +244,7 @@ void handle_response(const std::string & message) {
 				neg = -1;
 				res = res.substr(1);
 			}
-			angle = 180 + neg * atof(res.c_str());
+			angle = 180 + neg * atof(res.c_str()) - 8;
 			//cout << posx << " " << posy <<" " <<posz <<" " <<angle  << " end\n";
 			angle = angle * M_PI / 180;
 
@@ -244,7 +257,7 @@ void handle_response(const std::string & message) {
 				double end_x_robot = depthImg.at<USHORT>(240, i) / 10.0;
 				if (end_x_robot == 0)
 					continue;
-				double end_y_robot = (i - 320.0) / 575.0 * end_x_robot;
+				double end_y_robot = (i - 320.0) / 575	 * end_x_robot;
 				//cout << "cal" << endl;
 
 				///////////////////////////////////////////////
@@ -257,6 +270,7 @@ void handle_response(const std::string & message) {
 				///////////////////////////////////////////////
 				// update score from point
 				///////////////////////////////////////////////
+				
 				//cout << "posx = " << posx << endl;
 				//cout << "posy = " << posy << endl;
 				//cout << "angle = " << angle << endl;
@@ -270,21 +284,19 @@ void handle_response(const std::string & message) {
 
 			}
 
-			plot_score_map(false);
+			plot_score_map(false, posx + MAP_SIZE/2, posy + MAP_SIZE / 2);
 
 			///////////////////////////////////////////////
 			// Meen: find path to grid that score 0 (BFS)
 			///////////////////////////////////////////////
-			int des_x, des_y;
-			if (!get_next_point(posx, posy, des_x, des_y)) {
-				finish = true;
-			}
-			else {
-				///////////////////////////////////////////////
-				// walk to first point of Meen's path
-				///////////////////////////////////////////////
-				walk_to(posx, posy, angle, des_x, des_y);
-			}
+			//int des_x, des_y;
+			//if (!get_next_point(posx, posy, des_x, des_y)) {
+			//	finish = true;
+			//}
+			//else {
+			//	walk_to(posx, posy, angle, des_x, des_y);
+			//}
+
 		}
 		else
 			res = res.substr(res.find("<br/>") + 5, res.size() - res.find("<br/>") - 5);
@@ -323,7 +335,7 @@ boolean initial_socket() {
 }
 
 void close() {
-	robot.Disconnect();
+	//robot.Disconnect();
 	wp->close();
 	delete wp;
 	WSACleanup();
@@ -337,10 +349,33 @@ int main()
 
 		while (true)
 		{
-			//wp->poll();
-			//wp->send("");
-			//wp->dispatch(handle_response);
-			handle_response(" | id: 8   pos: 0, 0, 0   angle: -180<br/>");
+			wp->poll();
+			wp->send("");
+			wp->dispatch(handle_response);
+			
+
+			char c = cvWaitKey(30);
+			if (c == 27) break;
+
+			double vx, vz;
+			vx = vz = 0.0;
+
+			switch (c)
+			{
+			case 'w': vx = +1; break;
+			case 's': vx = -1; break;
+			case 'a': vz = +1;  break;
+			case 'd': vz = -1;  break;
+			case ' ': vx = vz = 0; break;
+			case 'c': robot.Connect(Create_Comport); break;
+			}
+
+			double vl = vx - vz;
+			double vr = vx + vz;
+
+			int velL = (int)(vl*Create_MaxVel);
+			int velR = (int)(vr*Create_MaxVel);
+			robot.DriveDirect(velL, velR);
 
 			if (finish)
 				break;
@@ -352,6 +387,8 @@ int main()
 
 		close();
 	}
+
+	getchar();
 
 	return 0;
 }
