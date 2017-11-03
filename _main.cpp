@@ -33,7 +33,10 @@
 #define Create_Comport "COM3"
 #define M_PI 3.141592653589793238462643383279502884L
 #define ROBOT_SIZE 50
-#define MAP_SIZE 600
+#define MAP_SIZE_X 400
+#define MAP_SIZE_Y 300
+#define MAP_ROBOT_X 400
+#define MAP_ROBOT_Y 300
 
 bool isRecord = false;
 
@@ -49,9 +52,9 @@ Mat colorImg;
 Mat indexImg;
 Mat pointImg;
 queue <pair<int, int> > q;
-int score[MAP_SIZE + 100][MAP_SIZE + 100];
-int d[MAP_SIZE + 100][MAP_SIZE + 100];
-pair<int, int> p[MAP_SIZE + 100][MAP_SIZE + 100];
+int score[MAP_SIZE_X + 100][MAP_SIZE_Y + 100];
+int d[MAP_SIZE_X + 100][MAP_SIZE_Y + 100];
+pair<int, int> p[MAP_SIZE_X + 100][MAP_SIZE_Y + 100];
 
 boolean finish = 0;
 WebSocket::pointer wp;
@@ -75,48 +78,68 @@ void update_score(double sx, double sy, double ex, double ey) {
 	double k = 1 / (double)length;
 
 
-	for (int i = 50; i < length; i++) {
+	for (int i = 0; i < length; i++) {
 		int x, y;
 		x = sx + k*(i + 1)*(ex - sx);
 		y = sy + k*(i + 1)*(ey - sy);
 
-		if (x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE) {
+		if (x >= 0 && x < MAP_SIZE_X && y >= 0 && y < MAP_SIZE_Y) {
 			if (i > (length - 2)) {
-				score[x][y] += 4;
-				score[x][y + 1] += 4;
-				score[x + 1][y] += 4;
-				score[x + 1][y + 1] += 4;
+				if(score[x][y] < 1000)
+					score[x][y] += 4;
+				if (score[x][y+1] < 1000)
+					score[x][y + 1] += 4;
+				if (score[x + 1][y] < 1000)
+					score[x + 1][y] += 4;
+				if (score[x + 1][y + 1] < 1000)
+					score[x + 1][y + 1] += 4;
 			}
 			else {
-				score[x][y] += -1;
-				score[x][y + 1] += -1;
-				score[x + 1][y] += -1;
-				score[x + 1][y + 1] += -1;
+				if (score[x][y] < 1000)
+					score[x][y] += -1;
+				if (score[x][y + 1] < 1000)
+					score[x][y + 1] += -1;
+				if (score[x + 1][y] < 1000)
+					score[x + 1][y] += -1;
+				if (score[x + 1][y + 1] < 1000)
+					score[x + 1][y + 1] += -1;
 			}
+		
+			if (score[x][y] > 0)
+				break;
 		}
 	}
 }
 
 
 void walk_to(double posx, double posy, double angle, int endx, int endy) {
+
+	cvNamedWindow("robot");
+
 	double diffx = abs(posx - endx);
 	double diffy = abs(posy - endy);
-	angle = angle - 90;
+	angle = angle - 180;
 	if (angle < 0) {
 		angle += 360;
 	}
 
-	double target_angle = atan(diffy / diffx);
-	double diff_angle = target_angle - angle;
-	if (diff_angle < 0) {
-		diff_angle += 360;
-	}
+	double target_angle = atan(diffx / diffy);
+	target_angle = target_angle * 180 / M_PI;
 
-	if (diff_angle > 5) {
-		double r = /*diff_angle <= 180 ? -1 :*/ 1;
+	double diff_angle = target_angle - angle;
+	if (abs(target_angle - angle) > 5) {
+
 		double vl, vr;
-		vl = r;
-		vr = r;
+
+		if (diff_angle > 0) {
+			vl = 1;
+			vr = -1;
+		}
+		else {
+			vr = 1;
+			vl = -1;
+		}
+
 		int velL = (int)(vl*Create_MaxVel);
 		int velR = (int)(vr*Create_MaxVel);
 
@@ -126,7 +149,7 @@ void walk_to(double posx, double posy, double angle, int endx, int endy) {
 		return;
 	}
 
-	if (diffx > 1 && diffy > 1)
+	if (diffx > 1 || diffy > 1)
 	{
 		double vx, vz;
 		vx = vz = 0.0;
@@ -158,12 +181,14 @@ void convert_to_world_frame(double posx, double posy, double angle, double end_x
 
 void plot_score_map(boolean save = false, int posx = -1, int posy = -1) {
 
-	Mat map(MAP_SIZE, MAP_SIZE, CV_8UC3, Scalar(0, 0, 0));
+	Mat map(MAP_SIZE_Y, MAP_SIZE_X, CV_8UC3, Scalar(0, 0, 0));
 
-	for (int i = 0; i < MAP_SIZE; i++) {
-		for (int j = 0; j < MAP_SIZE; j++) {
+	for (int i = 0; i < MAP_SIZE_X; i++) {
+		for (int j = 0; j < MAP_SIZE_Y; j++) {
 			if (score[i][j] < -100)
 				map.at<Vec3b>(j, i) = Vec3b(255, 255, 255);
+			if (score[i][j] > 100)
+				map.at<Vec3b>(j, i) = Vec3b(0, 0, 255);
 		}
 	}
 
@@ -175,12 +200,10 @@ void plot_score_map(boolean save = false, int posx = -1, int posy = -1) {
 		}
 	}
 
-	Mat enc;
-	resize(map, enc, Size(MAP_SIZE, MAP_SIZE));
-	imshow("world", enc);
+	imshow("world", map);
 	
 	if(save)
-		imwrite("map.jpg", enc);
+		imwrite("map.jpg", map);
 
 }
 
@@ -188,36 +211,51 @@ boolean get_next_point(int posx, int posy, int& des_x, int& des_y) {
 	int dx[] = { 0,-1,1,0 };
 	int dy[] = { -1,0,0,1 };
 
+	while (!q.empty())
+		q.pop();
+	for (int i = 0; i <= MAP_SIZE_X; i++)
+		for (int j = 0; j <= MAP_SIZE_Y; j++)
+			d[i][j] = 0;
+
 	q.push(make_pair(posx, posy));
 	d[posx][posy] = 1;
 
 	while (!q.empty()) {
+
 		int ux = q.front().first;
 		int uy = q.front().second;
 		q.pop();
 		for (int i = 0; i<4; i++) {
 			int vx = ux + dx[i];
 			int vy = uy + dy[i];
-			if (vx < MAP_SIZE && vx >= 0 && vy < MAP_SIZE && vy >= 0 && d[vx][vy] == 0 && robot_can_stay_at(vx, vy)) {
+
+			if (vx < MAP_ROBOT_X && vx >= 0 && vy < MAP_ROBOT_Y && vy >= 0 && d[vx][vy] == 0 && robot_can_stay_at(vx, vy)) {
 				d[vx][vy] = d[ux][uy] + 1;
 				p[vx][vy] = make_pair(ux, uy);
 				q.push(make_pair(vx, vy));
-				if (score[vx][vy] == 0) {
-					
+
+				if (score[vx][vy] == 0) {					
 					des_x = vx;
 					des_y = vy;
 
-					while (des_x != posx && des_y != posy) {
-						if (p[des_x][des_y].first == posx && p[des_x][des_y].second == posy)
+//					cout << posx <<" " <<posy <<" " << vx << " " << vy << endl;
+					while (des_x != posx || des_y != posy) {
+	//					cout << des_x << " " << des_y << " | " << p[des_x][des_y].first << " " << p[des_x][des_y].second << endl;
+							if (p[des_x][des_y].first == posx && p[des_x][des_y].second == posy)
 							return true;
-						des_x = p[des_x][des_y].first;
-						des_y = p[des_x][des_y].second;
+
+						int keepx = p[des_x][des_y].first;
+						int keepy = p[des_x][des_y].second;
+						des_x = keepx;
+						des_y = keepy;
 					}
+//					cout << "gg" << endl;
 					
 				}
 			}
 		}
 	}
+
 	return false;
 }
 
@@ -251,7 +289,7 @@ void handle_response(const std::string & message) {
 				neg = -1;
 				res = res.substr(1);
 			}
-			angle = 180 + neg * atof(res.c_str()) - 8;
+			angle = 180 + neg * atof(res.c_str());
 			//cout << posx << " " << posy <<" " <<posz <<" " <<angle  << " end\n";
 			angle = angle * M_PI / 180;
 
@@ -285,24 +323,27 @@ void handle_response(const std::string & message) {
 				//cout << "end_y_robot = " << end_y_robot << endl;
 				//cout << "end_x_world = " << end_x_world << endl;
 				//cout << "end_y_world = " << end_y_world << endl;
-				update_score(posx + MAP_SIZE / 2, posy + MAP_SIZE / 2, end_x_world + MAP_SIZE / 2, end_y_world + MAP_SIZE / 2);
+				update_score(posx + MAP_SIZE_X / 2, posy + MAP_SIZE_Y / 2, end_x_world + MAP_SIZE_X / 2, end_y_world + MAP_SIZE_Y / 2);
 
 				//cout << "updated" << endl;
 
 			}
 
-			plot_score_map(false, posx + MAP_SIZE/2, posy + MAP_SIZE / 2);
+			plot_score_map(false, posx + MAP_SIZE_X/2, posy + MAP_SIZE_Y / 2);
 
 			///////////////////////////////////////////////
 			// Meen: find path to grid that score 0 (BFS)
 			///////////////////////////////////////////////
-			//int des_x, des_y;
-			//if (!get_next_point(posx, posy, des_x, des_y)) {
-			//	finish = true;
-			//}
-			//else {
-			//	walk_to(posx, posy, angle, des_x, des_y);
-			//}
+			/*int des_x, des_y;
+			if (!get_next_point(posx + MAP_SIZE_X/ 2, posy + MAP_SIZE_Y / 2, des_x, des_y)) {
+				finish = true;
+			}
+			else {
+				cout << des_x << " " << des_y << endl;
+				des_x -= MAP_SIZE_X / 2;
+				des_y -= MAP_SIZE_Y / 2;
+				walk_to(posx, posy, angle, des_x, des_y);
+			}*/
 
 		}
 		else
@@ -337,7 +378,7 @@ boolean initial_socket() {
 		printf("WSAStartup Failed.\n");
 		return false;
 	}
-	wp = WebSocket::from_url("ws://192.168.1.59:8080/pose");
+	wp = WebSocket::from_url("ws://192.168.1.59:8081/pose");
 	return true;
 }
 
@@ -350,47 +391,25 @@ void close() {
 
 int main()
 {
-	cvNamedWindow("world");
+	cvNamedWindow("robot");
 
-	if (initial_robot() && initial_kinect() && initial_socket()) {
+	if( initial_kinect() && initial_socket()) {
 
+		cout << "Start" << endl;
+
+		finish = false;
 		while (true)
 		{
 			wp->poll();
 			wp->send("");
 			wp->dispatch(handle_response);
-			
-
-			char c = cvWaitKey(30);
-			if (c == 27) break;
-
-			double vx, vz;
-			vx = vz = 0.0;
-
-			switch (c)
-			{
-			case 'w': vx = +1; break;
-			case 's': vx = -1; break;
-			case 'a': vz = +1;  break;
-			case 'd': vz = -1;  break;
-			case ' ': vx = vz = 0; break;
-			case 'c': robot.Connect(Create_Comport); break;
-			}
-
-			double vl = vx - vz;
-			double vr = vx + vz;
-
-			int velL = (int)(vl*Create_MaxVel);
-			int velR = (int)(vr*Create_MaxVel);
-			robot.DriveDirect(velL, velR);
-
-			if (finish)
-				break;
 
 			cvWaitKey(100);
 		}
 
 		plot_score_map(true);
+
+		cout << "end" << endl;
 
 		close();
 	}
