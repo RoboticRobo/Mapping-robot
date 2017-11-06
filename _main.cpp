@@ -37,7 +37,7 @@
 #define MAP_SIZE_Y 370
 #define MAP_ROBOT_X 380
 #define MAP_ROBOT_Y 285
-#define GRID_SIZE 50
+#define GRID_SIZE 100
 
 bool lock = false;
 int updatePose = 2;
@@ -50,6 +50,7 @@ KinectConnector kin;
 CreateData	robotData;
 RobotConnector	robot;
 Mat depthImg;
+char mode;
 Mat colorImg;
 Mat indexImg;
 Mat pointImg;
@@ -82,7 +83,7 @@ void plot_score_map(boolean save = false) {
 
 	for (int i = 0; i < MAP_SIZE_X; i++) {
 		for (int j = 0; j < MAP_SIZE_Y; j++) {
-			if (red[i][j] > 0)
+			if (red[i][j] * 10 - white[i][j] > 0)
 				map.at<Vec3b>(j, i) = Vec3b(0, 0, 255);
 			else if (white[i][j] > 0)
 				map.at<Vec3b>(j, i) = Vec3b(255, 255, 255);
@@ -134,6 +135,11 @@ void update_score(int sx, int sy, int ex, int ey) {
 	for (; n > 0; --n)
 	{
 		if (x >= 0 && x < MAP_SIZE_X && y >= 0 && y < MAP_SIZE_Y) {
+
+			if (mode != 'a' && (red[x][y] * 10 - white[x][y]) > 0) {
+				break;
+			}
+
 			if (n == 1)
 				red[x][y] += 1;
 			else
@@ -159,7 +165,10 @@ void updateMap() {
 	tempx = posx;
 	tempy = posy;
 	tempangle = angle;
+
 	kin.GrabData(depthImg, colorImg, indexImg, pointImg);
+
+	cout << "update " << tempx << " " << tempy << " " << (tempangle * 180 / M_PI)<< endl;
 
 	for (int i = 0; i < 640; i++) {
 		///////////////////////////////////////////////
@@ -168,7 +177,7 @@ void updateMap() {
 		double end_x_robot = depthImg.at<USHORT>(240, i) / 10.0;
 		if (end_x_robot == 0)
 			continue;
-		double end_y_robot = (i - 320.0) / 533.71 * end_x_robot;
+		double end_y_robot = (i - 320.0) / 531.15 * end_x_robot;
 
 		///////////////////////////////////////////////
 		// convert point in robot frame to world frame
@@ -194,6 +203,9 @@ void updateMap() {
 
 	plot_score_map(false);
 }
+double min(double x, double y) {
+	return x < y ? x : y;
+}
 
 void walk_to(int endx, int endy) {
 
@@ -201,13 +213,14 @@ void walk_to(int endx, int endy) {
 	double diffy = posy - endy;
 
 	if (state == 1) {
+		if (!robot_can_stay_at(goto_x, goto_y)) {
+			state = 0;
+			return;
+		}
 
 		double target_angle = atan(diffy / diffx);
 		if (endx < posx)
 			target_angle += M_PI;
-
-		cout << "diff " << diffx << " " << diffy << endl;
-		cout << "old _Target = " << target_angle * 180 / M_PI << endl;
 
 		target_angle = (target_angle + 2 * M_PI);
 		while (target_angle > M_PI * 2) {
@@ -217,12 +230,16 @@ void walk_to(int endx, int endy) {
 		while (angle > M_PI * 2) {
 			angle -= M_PI * 2;
 		}
-		double diff_angle = target_angle - angle;
-		cout << target_angle * 180 / M_PI << " " << angle * 180 / M_PI << " " << diff_angle * 180 / M_PI << endl;
-		if (abs(diff_angle * 180 / M_PI) > 10) {
+
+		double diff;
+		if (target_angle > angle)
+			diff = min(target_angle - angle, angle + (2 * M_PI - target_angle));
+		else 
+			diff = min(angle - target_angle, target_angle + (2 * M_PI - angle));
+
+		if ( ( diff * 180 / M_PI) > 10) {
 
 			if (target_angle > angle) {
-				cout << target_angle - angle << " " << (angle + (2 * M_PI - target_angle)) << " ttt" << endl;
 				if (target_angle - angle < angle + (2 * M_PI - target_angle)) {
 					vr = 0.1;
 					vl = -0.1;
@@ -259,33 +276,10 @@ void walk_to(int endx, int endy) {
 
 		}
 		else {
-			if (visit[goto_x][goto_y])
-				state = 0;
-			else
-				state = 2;
-		}
-	}
-	else if (state >= 2) {
-
-		updateMap();
-
-		vl = 0.5;
-		vr = -0.5;
-
-		int velL = (int)(vl*Create_MaxVel);
-		int velR = (int)(vr*Create_MaxVel);
-
-		robot.DriveDirect(velL, velR);
-		Sleep(400);
-		robot.DriveDirect(0, 0);
-		Sleep(100);
-
-
-		state++;
-		if (state > 8) {
-			visit[goto_x][goto_y] = true;
+			visit[goto_x / GRID_SIZE][goto_y / GRID_SIZE] = true;
 			state = 0;
 		}
+
 	}
 }
 
@@ -293,8 +287,8 @@ void walk_to(int endx, int endy) {
 
 boolean get_next_point(int posx, int posy, int& des_x, int& des_y) {
 
-	int dx[] = { 0, GRID_SIZE,-1* GRID_SIZE,0 };
-	int dy[] = { -1*GRID_SIZE,0,0,GRID_SIZE};
+	int dx[] = { 0, GRID_SIZE,0,-1 * GRID_SIZE };
+	int dy[] = { -1 * GRID_SIZE,0,GRID_SIZE,0 };
 
 	while (!q.empty())
 		q.pop();
@@ -304,8 +298,6 @@ boolean get_next_point(int posx, int posy, int& des_x, int& des_y) {
 
 	q.push({ posx, posy });
 	d[posx][posy] = 1;
-
-	cout << "bfs" << endl;
 
 	while (!q.empty()) {
 
@@ -321,12 +313,10 @@ boolean get_next_point(int posx, int posy, int& des_x, int& des_y) {
 				p[vx][vy] = make_pair(ux, uy);
 				q.push(make_pair(vx, vy));
 
-				cout << visit[vx / GRID_SIZE][vy / GRID_SIZE] << " " << (abs(vx - MAP_SIZE_X / 2) < (MAP_ROBOT_X / 2)) << " " << (abs(vy - MAP_SIZE_Y / 2) < (MAP_ROBOT_Y / 2)) << endl;
 				if (!visit[vx/GRID_SIZE][vy/GRID_SIZE] && abs(vx - MAP_SIZE_X / 2) < (MAP_ROBOT_X / 2) && abs(vy - MAP_SIZE_Y / 2) < (MAP_ROBOT_Y / 2)) {
 					des_x = vx;
 					des_y = vy;
 
-					cout << "kuy " << endl;
 					while (des_x != posx || des_y != posy) {
 
 						if (p[des_x][des_y].first == posx && p[des_x][des_y].second == posy)
@@ -445,7 +435,7 @@ void walk() {
 
 	double des_x = goto_x - MAP_SIZE_X / 2.0;
 	double des_y = goto_y - MAP_SIZE_Y / 2.0;
-	cout << "goto " << posx << " " << posy << " " << des_x << " " << des_y << "state " << state << endl;
+	cout << "goto " << posx << " " << posy << " " << goto_x / GRID_SIZE << " " << goto_y / GRID_SIZE << "state " << state << endl;
 	walk_to(des_x, des_y);
 
 	updatePose = 2;
@@ -458,7 +448,12 @@ int main()
 
 	if(initial_robot() && initial_kinect() && initial_socket()) {
 
-		updatePose = 2;
+		cout << "Press A for autonomous mode" << endl;
+		cout << "Press other for hand mode" << endl;
+		cout << "Choose : ";
+		cin >> mode;
+
+		updatePose = 1;
 			
 		cout << "Start" << endl;
 		finish = false;
@@ -475,19 +470,31 @@ int main()
 			if (lock)
 				continue;
 
-			updatePose--;
-			if (updatePose <= 0) {
+			if ( mode == 'a') {
+				updatePose--;
+				if (updatePose <= 0) {
 
-				cout << "pose " << posx << " " << posy << " " << angle << endl;
-				if (posx != -1000 && posy != -1000) {
-					walk();
+					cout << "pose " << posx << " " << posy << " " << angle << endl;
+					if (posx != -1000 && posy != -1000) {
+						updateMap();
+						walk();
+					}
 				}
+
+				for (int i = 0; i < 6; i++) {
+					for (int j = 0; j < 6; j++) {
+						cout << visit[i][j] << " ";
+					}
+					cout << endl;
+				}
+			}
+			else {
+				updateMap();
+				updatePose = 2;
 			}
 
 			if (finish)
 				break;
-
-			cvWaitKey(100);
 		}
 
 		plot_score_map(true);
