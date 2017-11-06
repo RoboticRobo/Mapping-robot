@@ -145,23 +145,24 @@ void walk_to(int endx, int endy) {
 	if (abs(diff_angle * 180 / M_PI) > 10) {
 
 		if (target_angle > angle) {
+			cout << target_angle - angle << " " << (angle + (2 * M_PI - target_angle)) << " ttt" << endl;
 			if (target_angle - angle < angle + (2 * M_PI - target_angle)) {
-				vr = -0.2;
-				vl = 0.2;
-			}
-			else {
 				vr = 0.2;
 				vl = -0.2;
+			}
+			else {
+				vr = -0.2;
+				vl = 0.2;
 			}
 		}
 		else {
 			if (angle - target_angle < target_angle + (2 * M_PI - angle)) {
-				vr = 0.2;
-				vl = -0.2;
-			}
-			else {
 				vr = -0.2;
 				vl = 0.2;
+			}
+			else {
+				vr = 0.2;
+				vl = -0.2;
 			}
 		}
 
@@ -244,8 +245,8 @@ boolean get_next_point(int posx, int posy, int& des_x, int& des_y) {
 
 	cout << "bfs" << endl;
 
-	des_x = 300;
-	des_y = -100;
+	des_x = 0;
+	des_y = 0;
 	return true;
 
 	while (!q.empty()) {
@@ -353,7 +354,7 @@ boolean initial_socket() {
 		printf("WSAStartup Failed.\n");
 		return false;
 	}
-	wp = WebSocket::from_url("ws://192.168.1.59:8081/pose");
+	wp = WebSocket::from_url("ws://192.168.1.59:8080/pose");
 	return true;
 }
 
@@ -416,6 +417,9 @@ void walk() {
 	else {
 		des_x -= MAP_SIZE_X / 2;
 		des_y -= MAP_SIZE_Y / 2;
+
+		des_x = 0;
+		des_y = 0;
 		cout << posx << " " << posy << " " << des_x << " " << des_y << endl;
 		walk_to(des_x, des_y);
 	}
@@ -451,7 +455,7 @@ void walk() {
 int main()
 {
 	cvNamedWindow("robot");
-	freopen("output.txt", "w", stdout);
+	//freopen("output.txt", "w", stdout);
 
 	if(initial_robot() && initial_kinect() && initial_socket()) {
 
