@@ -39,6 +39,7 @@
 #define MAP_ROBOT_Y 285
 
 bool lock = false;
+int updatePose = 2;
 
 using namespace std;
 using namespace cv;
@@ -92,13 +93,13 @@ void update_score(int sx, int sy, int ex, int ey) {
 	{
 		if (x >= 0 && x < MAP_SIZE_X && y >= 0 && y < MAP_SIZE_Y) {
 			if (n == 1) {
-				score[x][y] *= 1.05;
+				score[x][y] *= 1.07;
 				if (score[x][y] >= 0.9)
 					score[x][y] = 0.9;
 			}
 			else {
 				if (score[x][y] < 0.9) {
-					score[x][y] *= 0.98;
+					score[x][y] *= 0.96;
 					if (score[x][y] <= 0.1)
 						score[x][y] = 0.1;
 				}
@@ -133,31 +134,57 @@ void walk_to(int endx, int endy) {
 	while (target_angle > M_PI * 2) {
 		target_angle -= M_PI * 2;
 	}
+	angle += 2 * M_PI;
+	while (angle > M_PI * 2) {
+		angle -= M_PI * 2;
+	}
 
 	double diff_angle = target_angle - angle;
 	cout << target_angle * 180 / M_PI << " " << angle * 180 / M_PI << " " << diff_angle * 180 / M_PI << endl;
 
 	if (abs(diff_angle * 180 / M_PI) > 10) {
 
-		vr = 0.1;
-		vl = -0.1;
+		if (target_angle > angle) {
+			if (target_angle - angle < angle + (2 * M_PI - target_angle)) {
+				vr = -0.2;
+				vl = 0.2;
+			}
+			else {
+				vr = 0.2;
+				vl = -0.2;
+			}
+		}
+		else {
+			if (angle - target_angle < target_angle + (2 * M_PI - angle)) {
+				vr = 0.2;
+				vl = -0.2;
+			}
+			else {
+				vr = -0.2;
+				vl = 0.2;
+			}
+		}
 
 		int velL = (int)(vl*Create_MaxVel);
 		int velR = (int)(vr*Create_MaxVel);
 
 		robot.DriveDirect(velL, velR);
+		Sleep(200);
+		robot.DriveDirect(0, 0);
 		return;
 	}
 
-	if (diffx > 1 || diffy > 1)
+	if (diffx > 30 || diffy > 30)
 	{
-		vl = 0.1;
-		vr = 0.1;
+		vl = 0.2;
+		vr = 0.2;
 
 		int velL = (int)(vl*Create_MaxVel);
 		int velR = (int)(vr*Create_MaxVel);
 
 		robot.DriveDirect(velL, velR);
+		Sleep(200);
+		robot.DriveDirect(0, 0);
 		return;
 	}
 
@@ -203,8 +230,8 @@ void plot_score_map(boolean save = false) {
 }
 
 boolean get_next_point(int posx, int posy, int& des_x, int& des_y) {
-	int dx[] = { 1,0,0,-1 };
-	int dy[] = { 0,1,-1,0 };
+	int dx[] = { 10,10,10,0,0,-10,-10,-10 };
+	int dy[] = { 0,10,-10,10,-10,0,10,-10 };
 
 	while (!q.empty())
 		q.pop();
@@ -216,12 +243,17 @@ boolean get_next_point(int posx, int posy, int& des_x, int& des_y) {
 	d[posx][posy] = 1;
 
 	cout << "bfs" << endl;
+
+	des_x = 300;
+	des_y = -100;
+	return true;
+
 	while (!q.empty()) {
 
 		int ux = q.front().first;
 		int uy = q.front().second;
 		q.pop();
-		for (int i = 0; i<4; i++) {
+		for (int i = 0; i<8; i++) {
 			int vx = ux + dx[i];
 			int vy = uy + dy[i];
 
@@ -266,11 +298,12 @@ void get_pose(const std::string & message) {
 			///////////////////////////////////////////////
 			// extract position and angle from response
 			///////////////////////////////////////////////
-			posx = atof(res.substr(res.find("pos:") + 5, res.find(",") - res.find("pos:") - 5).c_str());
+			double tempx, tempy, tempz, tempangle;
+			tempx = atof(res.substr(res.find("pos:") + 5, res.find(",") - res.find("pos:") - 5).c_str());
 			res = res.substr(res.find(",") + 2);
-			posy = atof(res.substr(0, res.find(",")).c_str());
+			tempy = atof(res.substr(0, res.find(",")).c_str());
 			res = res.substr(res.find(",") + 2);
-			posz = atof(res.substr(0, res.find(",")).c_str());
+			tempz = atof(res.substr(0, res.find(",")).c_str());
 			res = res.substr(res.find("angle: ") + 7);
 
 			double neg = 1;
@@ -278,12 +311,13 @@ void get_pose(const std::string & message) {
 				neg = -1;
 				res = res.substr(1);
 			}
-			angle = 180 + neg * atof(res.c_str());
-			angle = angle * M_PI / 180;
-			double tempx, tempy;
-			convert_to_world_frame(posx, posy, angle, 13, 0, tempx, tempy);
-			posx = tempx;
-			posy = tempy;
+			tempangle = 180 + neg * atof(res.c_str());
+			tempangle = tempangle * M_PI / 180;
+
+			if (updatePose > 0) {
+				convert_to_world_frame(tempx, tempy, tempangle, 13, 0, posx, posy);
+				angle = tempangle;
+			}
 		}
 		else
 			res = res.substr(res.find("<br/>") + 5, res.size() - res.find("<br/>") - 5);
@@ -356,64 +390,76 @@ void updateMap() {
 
 	}
 
-	plot_score_map(false);
+	for (int i = posx - (ROBOT_SIZE - 1) / 2; i < posx + (ROBOT_SIZE + 1) / 2; i++) {
+		for (int j = posy - (ROBOT_SIZE - 1) / 2; j < posy + (ROBOT_SIZE + 1) / 2; j++) {
+			if (i < 0 || i >= MAP_ROBOT_X || j < 0 || j >= MAP_ROBOT_Y)
+				continue;
 
+			score[i][j] = 0.1;
+		}
+	}
+
+	plot_score_map(false);
 }
 
 void walk() {
 
+	cvNamedWindow("robot");
+
 	///////////////////////////////////////////////
 	// Meen: find path to grid that score 0 (BFS)
 	///////////////////////////////////////////////
-	/*int des_x, des_y;
+	int des_x, des_y;
 	if (!get_next_point(posx + MAP_SIZE_X/ 2, posy + MAP_SIZE_Y / 2, des_x, des_y)) {
-	finish = true;
+		finish = true;
 	}
 	else {
-	des_x -= MAP_SIZE_X / 2;
-	des_y -= MAP_SIZE_Y / 2;
-	cout << posx << " " << posy << " " << des_x << " " << des_y << endl;
-	walk_to(posx, posy, angle, des_x, des_y);
-	}*/
-
-	cout << "fuck" << endl;
-
-
-	char c = cvWaitKey(30);
-
-	switch (c)
-	{
-	case 'w': vl = 0.2; vr = 0.2; break;
-	case 's': vl = -0.2; vr = -0.2; break;
-	case 'a': vl = -0.2; vr = 0.2; break;
-	case 'd': vl = 0.2; vr = -0.2; break;
+		des_x -= MAP_SIZE_X / 2;
+		des_y -= MAP_SIZE_Y / 2;
+		cout << posx << " " << posy << " " << des_x << " " << des_y << endl;
+		walk_to(des_x, des_y);
 	}
 
+	//cout << "input" << endl;
 
-	int velL = (int)(vl*Create_MaxVel);
-	int velR = (int)(vr*Create_MaxVel);
 
-	robot.DriveDirect(velL, velR);
+	//char c = cvWaitKey(30);
 
-	vl /= 1.2;
-	vr /= 1.2;
-	if (abs(vl) < 0.08 || abs(vr) < 0.08) {
-		vl = 0;
-		vr = 0;
-	}
+	//switch (c)
+	//{
+	//case 'w': vl = 0.5; vr = 0.5; break;
+	//case 's': vl = -0.5; vr = -0.5; break;
+	//case 'a': vl = -0.5; vr = 0.5; break;
+	//case 'd': vl = 0.5; vr = -0.5; break;
+	//default: vl = 0; vr = 0; break;
+	//}
+
+
+	//vl = 0.2;
+	//vr = -0.2;
+
+	//int velL = (int)(vl*Create_MaxVel);
+	//int velR = (int)(vr*Create_MaxVel);
+
+	//robot.DriveDirect(velL, velR);
+	//Sleep(500);
+	//robot.DriveDirect(0, 0);
+
+	updatePose = 2;
 }
 
 int main()
 {
 	cvNamedWindow("robot");
+	freopen("output.txt", "w", stdout);
 
-	if(initial_kinect() && initial_socket()) {
+	if(initial_robot() && initial_kinect() && initial_socket()) {
 
 		for (int i = 0; i < MAP_SIZE_X; i++) {
 			for (int j = 0; j < MAP_SIZE_Y; j++)
 				score[i][j] = 0.5;
 		}
-
+			
 		cout << "Start" << endl;
 		finish = false;
 		while (true)
@@ -428,17 +474,21 @@ int main()
 			if (lock)
 				continue;
 
-			cout << "pose " << posx << " " << posy << endl;
+			updatePose--;
+			if (updatePose <= 0) {
 
-			if (posx != -1000 && posy != -1000) {
-				updateMap();
-			//2221	walk();
+				cout << "pose " << posx << " " << posy << endl;
+
+				if (posx != -1000 && posy != -1000) {
+					updateMap();
+					walk();
+				}
 			}
 
 			if (finish)
 				break;
 
-			cvWaitKey(100);
+			//cvWaitKey(100);
 		}
 
 		plot_score_map(true);
