@@ -109,13 +109,13 @@ void processMap(Mat image, boolean save = false) {
 
 	for (int i = 0; i < 400; i++) {
 		for (int j = 0; j < 500; j++) {
-			if (image.at<Vec3b>(i, j) != Vec3b(255, 255, 255))
-				image.at<Vec3b>(i, j) = Vec3b(0, 0, 255);
+			if (image.at<Vec3b>(i, j) != Vec3b(0, 0, 255))
+				image.at<Vec3b>(i, j) = Vec3b(255, 255, 255);
 
 			success[i][j] = false;
 		}
 	}
-
+	
 	vector<vector<Point>> groups;
 	for (int i = 0; i < 400; i++) {
 		for (int j = 0; j < 500; j++) {
@@ -545,11 +545,12 @@ int main()
 	cvNamedWindow("robot");
 	//freopen("output.txt", "w", stdout);
 
-	while (true) {
-		processMap();
+	/*while (true) {
+		Mat image = imread("map2.jpg", 1);
+		processMap(image);
 		cvWaitKey(100);
 	}
-
+*/
 	cout << "Press A for autonomous mode" << endl;
 	cout << "Press other for hand mode" << endl;
 	cout << "Choose : ";
