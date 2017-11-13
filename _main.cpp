@@ -61,6 +61,7 @@ int red[MAP_SIZE_X + 100][MAP_SIZE_Y + 100];
 int d[MAP_SIZE_X + 100][MAP_SIZE_Y + 100];
 pair<int, int> p[MAP_SIZE_X + 100][MAP_SIZE_Y + 100];
 bool visit[MAP_SIZE_X + 100][MAP_SIZE_Y + 100];
+bool success[MAP_SIZE_X + 100][MAP_SIZE_Y + 100];
 double vl, vr;
 double posx = -1000, posy = -1000, posz, angle;
 int goto_x, goto_y;
@@ -78,6 +79,68 @@ void convert_to_world_frame(double posx, double posy, double angle, double end_x
 	end_world_x = roundDown(posx + (end_x_robot * cos(angle) + end_y_robot * sin(angle)));
 	end_world_y = roundDown(posy + (end_x_robot * -1 * sin(angle) + end_y_robot * cos(angle)));
 }
+
+
+void distri(Mat& image, vector<Point>& group, int x, int y) {
+
+	queue<Point> q;
+
+	q.push(Point(x, y));
+	success[x][y] = true;
+
+	while (!q.empty()) {
+
+
+		Point p = q.front();
+		q.pop();
+		group.push_back(Point(p.y, p.x));
+
+		for (int i = p.x - 2; i <= p.x + 2; i++)
+			for (int j = p.y - 2; j <= p.y + 2; j++)
+				if (i >= 0 && i <= 400 && j >= 0 && j <= 500 && !success[i][j] && image.at<Vec3b>(i, j) == Vec3b(0, 0, 255)) {
+					q.push(Point(i, j));
+					success[i][j] = true;
+				}
+	}
+
+}
+
+void processMap(Mat image, boolean save = false) {
+
+	for (int i = 0; i < 400; i++) {
+		for (int j = 0; j < 500; j++) {
+			if (image.at<Vec3b>(i, j) != Vec3b(255, 255, 255))
+				image.at<Vec3b>(i, j) = Vec3b(0, 0, 255);
+
+			success[i][j] = false;
+		}
+	}
+
+	vector<vector<Point>> groups;
+	for (int i = 0; i < 400; i++) {
+		for (int j = 0; j < 500; j++) {
+			if (!success[i][j] && image.at<Vec3b>(i, j) == Vec3b(0, 0, 255)) {
+				vector<Point> group;
+				distri(image, group, i, j);
+				groups.push_back(group);
+			}
+		}
+	}
+
+	vector<vector<Point> >hull(groups.size());
+	for (int i = 0; i < groups.size(); i++)
+		convexHull(Mat(groups[i]), hull[i], false);
+
+	Mat drawing = Mat(image.size(), CV_8UC3, Scalar(255, 255, 255));
+	for (int i = 0; i< groups.size(); i++)
+		drawContours(drawing, hull, i, Scalar(0, 0, 255), CV_FILLED, 8, vector<Vec4i>(), 0, Point());
+
+	imshow("map", drawing);
+
+	if (save)
+		imwrite("map.jpg", drawing);
+}
+
 
 void plot_score_map(boolean save = false) {
 
@@ -99,7 +162,7 @@ void plot_score_map(boolean save = false) {
 	}
 
 	if (save)
-		imwrite("map.jpg", map);
+		imwrite("world.jpg", map);
 	else {
 
 		int ux = posx + MAP_SIZE_X / 2;
@@ -113,6 +176,8 @@ void plot_score_map(boolean save = false) {
 
 	resize(map, map, Size(MAP_SIZE_X, MAP_SIZE_Y));
 	imshow("world", map);
+	processMap(map, save);
+
 }
 bool robot_can_stay_at(int vx, int vy) {
 	for (int i = vx - (ROBOT_SIZE - 1) / 2; i < vx + (ROBOT_SIZE + 1) / 2; i++) {
@@ -408,9 +473,6 @@ void get_pose(const std::string & message) {
 				robustx.push_back(qx);
 				robusty.push_back(qy);
 				robustang.push_back(tempangle);
-				//angle = M_PI / 2;
-				//posx = ((int)posx / RESCALE) * RESCALE;
-				//posy = ((int)posy / RESCALE) * RESCALE;
 			}
 		}
 		else
@@ -483,6 +545,10 @@ int main()
 	cvNamedWindow("robot");
 	//freopen("output.txt", "w", stdout);
 
+	while (true) {
+		processMap();
+		cvWaitKey(100);
+	}
 
 	cout << "Press A for autonomous mode" << endl;
 	cout << "Press other for hand mode" << endl;
