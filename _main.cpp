@@ -309,6 +309,7 @@ void walk_to(int endx, int endy) {
 		robot.DriveDirect(velL, velR);
 		Sleep(700);
 		robot.DriveDirect(0, 0);
+		Sleep(100);
 
 		state++;
 		if (state >= 6) {
