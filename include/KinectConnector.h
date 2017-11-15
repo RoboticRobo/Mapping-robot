@@ -92,24 +92,24 @@ public :
 
 		HRESULT hr;
 		//////////// color //////////////////////////
-		hr = sensor->NuiImageStreamGetNextFrame( pColorStreamHandle, 5, &colorFrame );
-		if( !FAILED(hr) )
-		{
-			// Lock the frame data so the Kinect knows not to modify it while we're reading it
-			colorFrame.pFrameTexture->LockRect(0, &colorRect, NULL, 0);
-			if( colorRect.Pitch != 0 )
-			{
-				cv::Mat tmpColorImg(colorImg.rows, colorImg.cols, CV_8UC4, colorRect.pBits);
+		//hr = sensor->NuiImageStreamGetNextFrame( pColorStreamHandle, 5, &colorFrame );
+		//if( !FAILED(hr) )
+		//{
+		//	// Lock the frame data so the Kinect knows not to modify it while we're reading it
+		//	colorFrame.pFrameTexture->LockRect(0, &colorRect, NULL, 0);
+		//	if( colorRect.Pitch != 0 )
+		//	{
+		//		cv::Mat tmpColorImg(colorImg.rows, colorImg.cols, CV_8UC4, colorRect.pBits);
 
-				int val[6] = {0, 0, 1, 1, 2, 2};
-				cv::mixChannels(tmpColorImg, colorImg, std::vector<int>(val, val+6));
-				cv::flip(colorImg, colorImg, 1);
-			}
-			colorFrame.pFrameTexture->UnlockRect(0);
-			sensor->NuiImageStreamReleaseFrame( pColorStreamHandle, &colorFrame );
+		//		int val[6] = {0, 0, 1, 1, 2, 2};
+		//		cv::mixChannels(tmpColorImg, colorImg, std::vector<int>(val, val+6));
+		//		cv::flip(colorImg, colorImg, 1);
+		//	}
+		//	colorFrame.pFrameTexture->UnlockRect(0);
+		//	sensor->NuiImageStreamReleaseFrame( pColorStreamHandle, &colorFrame );
 
-			isGrabData = true;
-		}
+		//	isGrabData = true;
+		//}
 
 		////////////// depth //////////////////////////
 		hr = sensor->NuiImageStreamGetNextFrame(pDepthStreamHandle, 5, &depthFrame );

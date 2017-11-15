@@ -33,10 +33,10 @@
 #define Create_Comport "COM3"
 #define M_PI 3.141592653589793238462643383279502884L
 #define ROBOT_SIZE 40
-#define MAP_SIZE_X 500
-#define MAP_SIZE_Y 400
-#define MAP_ROBOT_X 300
-#define MAP_ROBOT_Y 200
+#define MAP_SIZE_X 400
+#define MAP_SIZE_Y 300
+#define MAP_ROBOT_X 350
+#define MAP_ROBOT_Y 250
 #define GRID_SIZE 50
 #define RESCALE 1
 
@@ -56,12 +56,12 @@ Mat colorImg;
 Mat indexImg;
 Mat pointImg;
 queue <pair<int, int> > q;
-int white[MAP_SIZE_X + 100][MAP_SIZE_Y + 100];
-int red[MAP_SIZE_X + 100][MAP_SIZE_Y + 100];
-int d[MAP_SIZE_X + 100][MAP_SIZE_Y + 100];
-pair<int, int> p[MAP_SIZE_X + 100][MAP_SIZE_Y + 100];
-bool visit[MAP_SIZE_X + 100][MAP_SIZE_Y + 100];
-bool success[MAP_SIZE_X + 100][MAP_SIZE_Y + 100];
+int white[MAP_SIZE_X + 200][MAP_SIZE_Y + 200];
+int red[MAP_SIZE_X + 200][MAP_SIZE_Y + 200];
+int d[MAP_SIZE_X + 200][MAP_SIZE_Y + 200];
+pair<int, int> p[MAP_SIZE_X + 200][MAP_SIZE_Y + 200];
+bool visit[MAP_SIZE_X + 200][MAP_SIZE_Y + 200];
+bool success[MAP_SIZE_X + 200][MAP_SIZE_Y + 200];
 double vl, vr;
 double posx = -1000, posy = -1000, posz, angle;
 int goto_x, goto_y;
@@ -93,11 +93,11 @@ void distri(Mat& image, vector<Point>& group, int x, int y) {
 
 		Point p = q.front();
 		q.pop();
-		group.push_back(Point(p.y, p.x));
+		group.push_back(Point(p.x, p.y));
 
 		for (int i = p.x - 2; i <= p.x + 2; i++)
 			for (int j = p.y - 2; j <= p.y + 2; j++)
-				if (i >= 0 && i <= 400 && j >= 0 && j <= 500 && !success[i][j] && image.at<Vec3b>(i, j) == Vec3b(0, 0, 255)) {
+				if (i >= 0 && i <= MAP_SIZE_X && j >= 0 && j <= MAP_SIZE_Y && !success[i][j] && image.at<Vec3b>(j, i) == Vec3b(0, 0, 255)) {
 					q.push(Point(i, j));
 					success[i][j] = true;
 				}
@@ -107,19 +107,19 @@ void distri(Mat& image, vector<Point>& group, int x, int y) {
 
 void processMap(Mat image, boolean save = false) {
 
-	for (int i = 0; i < 400; i++) {
-		for (int j = 0; j < 500; j++) {
-			if (image.at<Vec3b>(i, j) != Vec3b(0, 0, 255))
-				image.at<Vec3b>(i, j) = Vec3b(255, 255, 255);
+	for (int i = 0; i < MAP_SIZE_X; i++) {
+		for (int j = 0; j < MAP_SIZE_Y; j++) {
+			if (image.at<Vec3b>(j, i) != Vec3b(0, 0, 255))
+				image.at<Vec3b>(j, i) = Vec3b(255, 255, 255);
 
 			success[i][j] = false;
 		}
 	}
-	
+
 	vector<vector<Point>> groups;
-	for (int i = 0; i < 400; i++) {
-		for (int j = 0; j < 500; j++) {
-			if (!success[i][j] && image.at<Vec3b>(i, j) == Vec3b(0, 0, 255)) {
+	for (int i = 0; i < MAP_SIZE_X; i++) {
+		for (int j = 0; j < MAP_SIZE_Y; j++) {
+			if (!success[i][j] && image.at<Vec3b>(j, i) == Vec3b(0, 0, 255)) {
 				vector<Point> group;
 				distri(image, group, i, j);
 				groups.push_back(group);
@@ -131,9 +131,11 @@ void processMap(Mat image, boolean save = false) {
 	for (int i = 0; i < groups.size(); i++)
 		convexHull(Mat(groups[i]), hull[i], false);
 
+
 	Mat drawing = Mat(image.size(), CV_8UC3, Scalar(255, 255, 255));
-	for (int i = 0; i< groups.size(); i++)
+	for (int i = 0; i < groups.size(); i++)
 		drawContours(drawing, hull, i, Scalar(0, 0, 255), CV_FILLED, 8, vector<Vec4i>(), 0, Point());
+
 
 	imshow("map", drawing);
 
@@ -146,15 +148,15 @@ void plot_score_map(boolean save = false) {
 
 	Mat map(MAP_SIZE_Y / RESCALE, MAP_SIZE_X / RESCALE, CV_8UC3, Scalar(30, 30, 30));
 
-	for (int i = 0; i < MAP_SIZE_X/ RESCALE; i++) {
-		for (int j = 0; j < MAP_SIZE_Y/ RESCALE; j++) {
+	for (int i = 0; i < MAP_SIZE_X / RESCALE; i++) {
+		for (int j = 0; j < MAP_SIZE_Y / RESCALE; j++) {
 			int sumred = 0, sumwhite = 0;
 			for (int k = 0; k < RESCALE; k++)
 				for (int l = 0; l < RESCALE; l++) {
-					sumred += red[i * RESCALE  + k][j * RESCALE + l];
+					sumred += red[i * RESCALE + k][j * RESCALE + l];
 					sumwhite += white[i * RESCALE + k][j * RESCALE + l];
 				}
-			if (sumred *10 - sumwhite > 0)
+			if (sumred * 10 - sumwhite > 0)
 				map.at<Vec3b>(j, i) = Vec3b(0, 0, 255);
 			else if (sumwhite > 0)
 				map.at<Vec3b>(j, i) = Vec3b(255, 255, 255);
@@ -167,15 +169,16 @@ void plot_score_map(boolean save = false) {
 
 		int ux = posx + MAP_SIZE_X / 2;
 		int uy = posy + MAP_SIZE_Y / 2;
-		circle(map, Point(ux/ RESCALE, uy/ RESCALE), ROBOT_SIZE / 2 / RESCALE, Scalar(0, 255, 0), 3);
+		circle(map, Point(ux / RESCALE, uy / RESCALE), ROBOT_SIZE / 2 / RESCALE, Scalar(0, 255, 0), 3);
 
 		double end_x, end_y;
 		convert_to_world_frame(ux, uy, angle, 30, 0, end_x, end_y);
-		line(map, Point(ux/ RESCALE, uy/ RESCALE), Point(end_x/ RESCALE, end_y/ RESCALE), Scalar(255, 0, 0), 3);
+		line(map, Point(ux / RESCALE, uy / RESCALE), Point(end_x / RESCALE, end_y / RESCALE), Scalar(255, 0, 0), 3);
 	}
 
 	resize(map, map, Size(MAP_SIZE_X, MAP_SIZE_Y));
 	imshow("world", map);
+
 	processMap(map, save);
 
 }
@@ -212,7 +215,7 @@ void update_score(int sx, int sy, int ex, int ey) {
 		if (x >= 0 && x < MAP_SIZE_X && y >= 0 && y < MAP_SIZE_Y) {
 
 			/*if ((red[x][y] * 10 - white[x][y]) > 0) {
-				break;
+			break;
 			}*/
 
 			if (n == 1)
@@ -346,7 +349,7 @@ void walk_to(int endx, int endy) {
 			robot.DriveDirect(0, 0);
 			Sleep(100);
 		}
-		else if (sqrt(diffx * diffx + diffy * diffy) > 25) {
+		else if (sqrt(diffx * diffx + diffy * diffy) > 20) {
 			vl = 0.5;
 			vr = 0.5;
 
@@ -359,9 +362,9 @@ void walk_to(int endx, int endy) {
 			Sleep(100);
 		}
 		else {
-			 if (visit[goto_x / GRID_SIZE][goto_y / GRID_SIZE])
-				 state = 0;
-			 else state = 2;
+			if (visit[goto_x / GRID_SIZE][goto_y / GRID_SIZE])
+				state = 0;
+			else state = 2;
 		}
 	}
 	else if (state >= 2) {
@@ -415,7 +418,6 @@ boolean get_next_point(int posx, int posy, int& des_x, int& des_y) {
 				d[vx][vy] = d[ux][uy] + 1;
 				p[vx][vy] = make_pair(ux, uy);
 				q.push(make_pair(vx, vy));
-
 				if (!visit[vx / GRID_SIZE][vy / GRID_SIZE]) {
 					des_x = vx;
 					des_y = vy;
@@ -527,7 +529,7 @@ void walk() {
 	// Meen: find path to grid that score 0 (BFS)
 	///////////////////////////////////////////////
 	if (state == 0) {
-		if (!get_next_point(posx + MAP_SIZE_X / 2, posy + MAP_SIZE_Y / 2,goto_x, goto_y)) {
+		if (!get_next_point(posx + MAP_SIZE_X / 2, posy + MAP_SIZE_Y / 2, goto_x, goto_y)) {
 			finish = true;
 		}
 
@@ -546,11 +548,11 @@ int main()
 	//freopen("output.txt", "w", stdout);
 
 	/*while (true) {
-		Mat image = imread("map2.jpg", 1);
-		processMap(image);
-		cvWaitKey(100);
-	}
-*/
+	Mat image = imread("map2.jpg", 1);
+	processMap(image);
+	cvWaitKey(100);
+	*/
+
 	cout << "Press A for autonomous mode" << endl;
 	cout << "Press other for hand mode" << endl;
 	cout << "Choose : ";
@@ -578,6 +580,7 @@ int main()
 			if (updatePose <= 0) {
 				sort(robustx.begin(), robustx.end());
 				sort(robusty.begin(), robusty.end());
+
 				sort(robustang.begin(), robustang.end());
 
 				posx = robustx[robustx.size() / 2];
@@ -587,7 +590,6 @@ int main()
 				robustx.clear();
 				robusty.clear();
 				robustang.clear();
-
 
 				updateMap();
 
@@ -626,4 +628,3 @@ int main()
 
 	return 0;
 }
-
