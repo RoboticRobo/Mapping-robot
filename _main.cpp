@@ -33,12 +33,13 @@
 #define Create_Comport "COM3"
 #define M_PI 3.141592653589793238462643383279502884L
 #define ROBOT_SIZE 40
-#define MAP_SIZE_X 400
-#define MAP_SIZE_Y 300
-#define MAP_ROBOT_X 350
-#define MAP_ROBOT_Y 250
+#define MAP_SIZE_X 500
+#define MAP_SIZE_Y 400
+#define MAP_ROBOT_X 375
+#define MAP_ROBOT_Y 275
 #define GRID_SIZE 50
 #define RESCALE 1
+#define GAIN 10
 
 bool lock = false;
 int updatePose = 2;
@@ -73,6 +74,24 @@ WebSocket::pointer wp;
 
 double roundDown(double value) {
 	return value < 0.0001 && value > -0.0001 ? 0 : value;
+}
+
+
+bool robot_can_stay_at(int vx, int vy) {
+	for (int i = vx - (GRID_SIZE - 1) / 2; i < vx + (GRID_SIZE + 1) / 2; i++) {
+		for (int j = vy - (GRID_SIZE - 1) / 2; j < vy + (GRID_SIZE + 1) / 2; j++) {
+
+			if (i < 0 || j < 0)
+				continue;
+			if (abs(i - MAP_SIZE_X / 2) >(MAP_ROBOT_X / 2) || abs(j - MAP_SIZE_Y / 2) >(MAP_ROBOT_Y / 2))
+				continue;
+
+			if (red[i][j] - white[i][j] > 0) {
+				return false;
+			}
+		}
+	}
+	return true;
 }
 
 void convert_to_world_frame(double posx, double posy, double angle, double end_x_robot, double end_y_robot, double& end_world_x, double& end_world_y) {
@@ -143,6 +162,28 @@ void processMap(Mat image, boolean save = false) {
 		imwrite("map.jpg", drawing);
 }
 
+void debugMap() {
+
+	Mat debug(MAP_SIZE_Y / RESCALE, MAP_SIZE_X / RESCALE, CV_8UC3, Scalar(0, 0, 0));
+
+	for (int i = GRID_SIZE / 2; i < MAP_SIZE_X; i += GRID_SIZE) {
+		for (int j = GRID_SIZE / 2; j < MAP_SIZE_X; j += GRID_SIZE) {
+
+			if (abs(i - MAP_SIZE_X / 2) >(MAP_ROBOT_X / 2) || abs(j - MAP_SIZE_Y / 2) >(MAP_ROBOT_Y / 2))
+				continue;
+
+			if(visit[i/GRID_SIZE][j/GRID_SIZE])
+				rectangle(debug, Point(i - GRID_SIZE / 2, j - GRID_SIZE / 2), Point(i + GRID_SIZE / 2, j + GRID_SIZE / 2), Scalar(255, 0, 0), CV_FILLED);
+			else if(!robot_can_stay_at(i,j))
+				rectangle(debug, Point(i - GRID_SIZE / 2, j - GRID_SIZE / 2), Point(i + GRID_SIZE / 2, j + GRID_SIZE / 2), Scalar(0, 0, 255), CV_FILLED);
+			else
+				rectangle(debug, Point(i - GRID_SIZE / 2, j - GRID_SIZE / 2), Point(i + GRID_SIZE / 2, j + GRID_SIZE / 2), Scalar(0, 255, 0), CV_FILLED);
+		}
+	}
+
+	imshow("debug", debug);
+
+}
 
 void plot_score_map(boolean save = false) {
 
@@ -156,7 +197,7 @@ void plot_score_map(boolean save = false) {
 					sumred += red[i * RESCALE + k][j * RESCALE + l];
 					sumwhite += white[i * RESCALE + k][j * RESCALE + l];
 				}
-			if (sumred * 10 - sumwhite > 0)
+			if (sumred * GAIN - sumwhite > 0)
 				map.at<Vec3b>(j, i) = Vec3b(0, 0, 255);
 			else if (sumwhite > 0)
 				map.at<Vec3b>(j, i) = Vec3b(255, 255, 255);
@@ -180,21 +221,8 @@ void plot_score_map(boolean save = false) {
 	imshow("world", map);
 
 	processMap(map, save);
+	debugMap();
 
-}
-bool robot_can_stay_at(int vx, int vy) {
-	for (int i = vx - (ROBOT_SIZE - 1) / 2; i < vx + (ROBOT_SIZE + 1) / 2; i++) {
-		for (int j = vy - (ROBOT_SIZE - 1) / 2; j < vy + (ROBOT_SIZE + 1) / 2; j++) {
-
-			if (abs(i - MAP_SIZE_X / 2) >(MAP_ROBOT_X / 2) || abs(j - MAP_SIZE_Y / 2) >(MAP_ROBOT_Y / 2))
-				continue;
-
-			if (red[i][j] > 0) {
-				return false;
-			}
-		}
-	}
-	return true;
 }
 
 void update_score(int sx, int sy, int ex, int ey) {
@@ -214,7 +242,7 @@ void update_score(int sx, int sy, int ex, int ey) {
 	{
 		if (x >= 0 && x < MAP_SIZE_X && y >= 0 && y < MAP_SIZE_Y) {
 
-			/*if ((red[x][y] * 10 - white[x][y]) > 0) {
+			/*if ((red[x][y] * GAIN - white[x][y]) > 0) {
 			break;
 			}*/
 
@@ -263,7 +291,7 @@ void updateMap() {
 		double end_x_world, end_y_world;
 		convert_to_world_frame(tempx, tempy, tempangle, end_x_robot, end_y_robot, end_x_world, end_y_world);
 
-		///////////////////////////////////////////////
+		///////////////////////////////////////////////f
 		// update score from point
 		///////////////////////////////////////////////
 		update_score(tempx + MAP_SIZE_X / 2, tempy + MAP_SIZE_Y / 2, end_x_world + MAP_SIZE_X / 2, end_y_world + MAP_SIZE_Y / 2);
@@ -449,7 +477,6 @@ void get_pose(const std::string & message) {
 	while (res.find("<br/>") != string::npos) {
 
 		if (res.find("id: 8") == 0) {
-			cout << "found" << endl;
 			res = res.substr(0, res.find("<br/>"));
 
 			///////////////////////////////////////////////
@@ -538,7 +565,6 @@ void walk() {
 
 	double des_x = goto_x - MAP_SIZE_X / 2.0;
 	double des_y = goto_y - MAP_SIZE_Y / 2.0;
-	cout << "goto " << posx << " " << posy << " " << des_x << " " << des_y << "state " << state << endl;
 	walk_to(des_x, des_y);
 }
 
@@ -547,11 +573,12 @@ int main()
 	cvNamedWindow("robot");
 	//freopen("output.txt", "w", stdout);
 
-	/*while (true) {
-	Mat image = imread("map2.jpg", 1);
-	processMap(image);
-	cvWaitKey(100);
-	*/
+	//while (true) {
+	//	Mat image = imread("map2.jpg", 1);
+	//	processMap(image);
+	//	debugMap();
+	//	cvWaitKey(100);
+	//}
 
 	cout << "Press A for autonomous mode" << endl;
 	cout << "Press other for hand mode" << endl;
@@ -592,22 +619,12 @@ int main()
 				robustang.clear();
 
 				updateMap();
+				updateMap();
+				updateMap();
 
 				if (mode == 'a') {
 
 					walk();
-
-					for (int i = 0; i < 10; i++) {
-						for (int j = 0; j < 10; j++) {
-							int x = i*GRID_SIZE + GRID_SIZE / 2.0;
-							int y = j*GRID_SIZE + GRID_SIZE / 2.0;
-							if (!robot_can_stay_at(x, y))
-								cout << "2" << " ";
-							else
-								cout << visit[i][j] << " ";
-						}
-						cout << endl;
-					}
 				}
 
 				updatePose = 5;
